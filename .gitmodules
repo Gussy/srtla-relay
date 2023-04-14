@@ -1,0 +1,8 @@
+[submodule "srt"]
+	path = srt
+	url = https://github.com/Gussy/srt.git
+	shallow = true
+[submodule "srtla"]
+	path = srtla
+	url = https://github.com/Gussy/srtla.git
+	shallow = true
