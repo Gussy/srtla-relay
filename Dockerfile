@@ -1,59 +1,54 @@
-# SRTLA Builder
-FROM alpine:latest as srtla_builder
+# Builder
+FROM debian:stable-slim as builder
 
-RUN apk update &&\
-    apk upgrade &&\ 
-    apk add --no-cache alpine-sdk
+# Dependancies
+RUN set -xe; \
+    apt-get update; \
+    apt-get -y upgrade; \
+    apt-get install -y \
+    build-essential ca-certificates cmake git libssl-dev libz-dev tcl
 
-WORKDIR /srtla
-COPY ./srtla/*.c .
-COPY ./srtla/*.h .
-COPY ./srtla/Makefile .
-
-RUN make
-
-# SLS Builder
-FROM alpine:latest as sls_builder
-# RUN apt-get update \
-#     && apt-get upgrade \
-#     && apt-get install -y tclsh pkg-config cmake libssl-dev build-essential git-core zlib1g-dev \
-#     && rm -rf /var/lib/apt/lists/*
-
-RUN apk update &&\
-    apk upgrade &&\ 
-    apk add --no-cache linux-headers alpine-sdk cmake tcl openssl-dev zlib-dev
-
-WORKDIR /tmp
-COPY ./sls /tmp/srt-live-server/
-RUN git clone https://github.com/Haivision/srt.git
+# Belabox patched SRT
+RUN git clone https://github.com/Gussy/srt.git /tmp/srt
 WORKDIR /tmp/srt
-RUN git checkout v1.4.3 && ./configure && make -j8 && make install
-WORKDIR /tmp/srt-live-server
+RUN ./configure --prefix=/usr/local
 RUN make -j8
-
-# Final container
-FROM alpine:latest
-
-RUN apk update &&\
-    apk upgrade &&\ 
-    apk add --no-cache supervisor tzdata supervisor
-# ENV TZ=Etc/UTC
-RUN ln -sf /usr/share/zoneinfo/UTC /etc/localtime
-
-# Supervisord
-RUN mkdir -p /var/log/supervisor
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+RUN make install
+RUN ldconfig
 
 # SRTLA
-COPY --from=srtla_builder /srtla/srtla_rec /usr/local/bin/srtla_rec
+RUN git clone https://github.com/Gussy/srtla.git /tmp/srtla
+WORKDIR /tmp/srtla
+RUN make -j8
 
-# SLS
-COPY --from=sls_builder /usr/local/bin/srt-* /usr/local/bin/
-COPY --from=sls_builder /usr/local/lib/libsrt* /usr/local/lib/
-COPY --from=sls_builder /tmp/srt-live-server/bin/* /usr/local/bin/
+# SRT-live-server (SLS)
+RUN git clone https://github.com/Gussy/srt-live-server.git /tmp/srt-live-server
+WORKDIR /tmp/srt-live-server
+RUN LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH make -j8 
+
+# Final container
+FROM debian:stable-slim
+
+RUN set -xe; \
+    apt-get update; \
+    apt-get -y upgrade; \
+    apt-get install -y --no-install-recommends \
+    ca-certificates supervisor htop
+
+# Binaries and libraries
+COPY --from=builder /usr/local/bin/srt-* /usr/local/bin/
+COPY --from=builder /usr/local/lib/libsrt* /usr/local/lib/
+COPY --from=builder /tmp/srtla/srtla_rec /usr/local/bin/srtla_rec
+COPY --from=builder /tmp/srt-live-server/bin/* /usr/local/bin/
+
+# Files
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY sls.conf /etc/sls/sls.conf
-
 COPY logprefix /usr/local/bin/
+
+RUN ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+RUN ldconfig
+RUN chmod 755 /usr/local/bin/logprefix
 
 EXPOSE 5000/udp
 EXPOSE 8181/tcp

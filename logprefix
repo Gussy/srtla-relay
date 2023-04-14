@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 
 # setup fd-3 to point to the original stdout
 exec 3>&1
