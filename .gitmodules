@@ -6,3 +6,7 @@
 	path = srtla
 	url = https://github.com/Gussy/srtla.git
 	shallow = true
+[submodule "sls"]
+	path = sls
+	url = https://github.com/Gussy/srt-live-server.git
+	shallow = true
