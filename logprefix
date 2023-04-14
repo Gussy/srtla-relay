@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+
+# setup fd-3 to point to the original stdout
+exec 3>&1
+# setup fd-4 to point to the original stderr
+exec 4>&2
+
+# get the prefix from SUPERVISOR_PROCESS_NAME environment variable
+PREFIX=$(echo "${SUPERVISOR_PROCESS_NAME}" | cut -c -25)
+
+# define function to add prefix to output
+add_prefix() {
+  while read line; do
+    echo "${PREFIX} | ${line}"
+  done
+}
+
+# redirect stdout and stderr to the function that adds prefix to output
+exec 1> >( add_prefix >&3 )
+exec 2> >( add_prefix >&4 )
+
+# from here on everything that outputs to stdout/stderr will be go through the add_prefix function
+
+exec "$@"
